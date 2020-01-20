@@ -1,11 +1,10 @@
 all: hashsum
 
-#DEFINES=-D_DEBUG 
 DEFINES=
 CXXFLAGS= -g0 -Wall -Wl,--gc-sections  -O2 -std=c++17 
 CFLAGS= -g0 -Wall -Wl,--gc-sections  -O2 -std=c11 
 #-fsanitize=address -g3 -fno-omit-frame-pointer
-#  valgrind --tool=drd --show-stack-usage=yes ./hashsum -c check.gost 
+#valgrind --tool=drd --show-stack-usage=yes ./hashsum -c check.gost 
 hashsum: hashsum.cpp Makefile
 	g++ -c -DENABLE_SIMD -DL_ENDIAN $(DEFINES) -march=native $(CXXFLAGS) hashsum.cpp -o hashsum.o
 	gcc -c -DENABLE_SIMD -DL_ENDIAN $(DEFINES) -march=native $(CFLAGS) gosthash/gosthash2012.c -o gosthash2012.o	

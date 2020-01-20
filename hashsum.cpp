@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <array>
 #include <sstream>
 #include <thread>
@@ -24,7 +25,7 @@
 using namespace std;
 using namespace std::chrono;
 
-#define HASH_LINE_SIZE      16
+#define HASH_LINE_SIZE      24
 #define FILE_BUF_SIZE       (1024 * 8)
 
 enum HashResult: unsigned short {
@@ -69,22 +70,23 @@ static atomic_ulong  main_wait_time{0};
 static atomic_ulong  read_time{0};
 static atomic_ulong  calc_time{0};
 
-class Hash{
+class HashBase{
 public:
-    virtual size_t  digest (istream& istr, unsigned char out[64]) const{
+    virtual size_t  digest (istream& istr, unsigned char out[64]) const noexcept{
         return 0;
     }
-    virtual unsigned short digestsize() const {
+    virtual unsigned short digestsize() const noexcept{
         return 0;
     }
 };
 
-class Blake3: public Hash {
+class Blake3: public HashBase {
     static constexpr  unsigned short _digestsize = 32;
-    unsigned short digestsize() const {
+    unsigned short digestsize() const  noexcept{
         return _digestsize;
     }
-    size_t  digest (istream& istr, unsigned char out[64]) const{
+    
+    size_t  digest (istream& istr, unsigned char out[64]) const  noexcept{
         alignas(16) blake3_hasher   ctx;
         unsigned char  buff[FILE_BUF_SIZE];
         high_resolution_clock::time_point t1;
@@ -123,11 +125,12 @@ class Blake3: public Hash {
         return length;
     }   
 };
-///GOST 34.11-2012 digest impl
-class Gost34112012: public Hash {
+
+/// GOST 34.11-2012 digest impl
+class Gost34112012: public HashBase {
 
 public:
-    static size_t digest(istream& istr, unsigned short digest_size, unsigned char out[64]){
+    static size_t digest(istream& istr, unsigned short digest_size, unsigned char out[64]) {
         alignas(16) gost2012_hash_ctx   ctx;
         unsigned char  buff[FILE_BUF_SIZE];
         high_resolution_clock::time_point t1;
@@ -165,32 +168,33 @@ public:
         return length;  
     }
 };
-///GOST 34.11-2012(256) digest impl
+
+/// GOST 34.11-2012(256) digest impl
 class Gost34112012_256: public Gost34112012 {
     static constexpr  unsigned short _digestsize = 32;
-    unsigned short digestsize() const {
+    unsigned short digestsize() const  noexcept{
         return _digestsize;
     }
-    size_t  digest (istream& istr, unsigned char out[64]) const{
+    size_t  digest (istream& istr, unsigned char out[64]) const  noexcept{
         return Gost34112012::digest(istr, _digestsize, out);
     }
 };
-///GOST 34.11-2012(512) digest impl
+/// GOST 34.11-2012(512) digest impl
 class Gost34112012_512: public Gost34112012 {
     static constexpr  unsigned short _digestsize = 64;
-    unsigned short digestsize() const {
+    unsigned short digestsize() const  noexcept{
         return _digestsize;
     }
-    size_t  digest (istream& istr, unsigned char out[64]) const{
+    size_t  digest (istream& istr, unsigned char out[64]) const  noexcept{
         return Gost34112012::digest(istr, _digestsize, out);
     }
 };
-
+//virtual table pointers
 static const Gost34112012_256 _gost34112012_256 = Gost34112012_256();
 static const Gost34112012_512 _gost34112012_512 = Gost34112012_512();
 static const Blake3           _blake3           = Blake3();
 
-///Task slot
+/// task slot
 class alignas(16) HashLine{
     unsigned char       digest[64];
     
@@ -208,7 +212,7 @@ class alignas(16) HashLine{
             getDigest(cin, actial);
         }
         
-        if( memcmp(digest, actial, int( getDigestSize() ) ) == 0 ){
+        if( memcmp(digest, actial, int( hashtype->digestsize() ) ) == 0 ){
             return Success;
         }else{
             return HashMismatch;
@@ -219,7 +223,12 @@ public:
     string              filename;
     atomic_ushort       result;
     size_t              length;
-    static const Hash*  hashtype;
+    static const HashBase*  hashtype;
+    
+    HashLine(const HashLine&) = delete;
+    HashLine(HashLine&&) = delete;
+    HashLine& operator=(HashLine&& other) = delete;
+    HashLine& operator=(HashLine& other) = delete;
     
     HashLine(){
 #if __cplusplus > 201402L       
@@ -228,15 +237,12 @@ public:
         Release();
     }
     
-    inline unsigned short getDigestSize() const{
-        return hashtype->digestsize();
-    }
 
-    inline void Release(){
+    inline void Release() noexcept{
         result.store(HashResult::Initial, memory_order_release);
     }
     
-    inline void SetHashResult(HashResult r){
+    inline void SetHashResult(HashResult r) noexcept{
         result.store(static_cast<unsigned short>(r), memory_order_release);
     }
     
@@ -261,7 +267,7 @@ public:
     }
 #endif
     
-    bool hex2bin(  const char* str, int shift){
+    bool hex2bin(const char* str, int shift) noexcept{
         unsigned int c;
         const char* pend = str+64;
         while(str<pend){
@@ -294,7 +300,7 @@ public:
         }
     }
     
-    void getDigest(istream& istr, unsigned char out[64]){
+    void getDigest(istream& istr, unsigned char out[64]) {
         length = hashtype->digest(istr, out);
     }
         
@@ -306,16 +312,16 @@ public:
     
     void print_status(HashResult r) const{
         cerr<< filename<< " - ";
-        cerr<< (r == Success ? cGREEN: cRED )<< result_str(r) << cNORM<< endl;
+        cerr<< (r == Success ? cGREEN: cRED )<< result_str(r) << cNORM<< "\n";
     }
     
-}; // __attribute__ ((aligned (16)));
+}; //use C++11 standard alignas attribute instead of GNUC specific __attribute__ ((aligned (16)));
 
 
 typedef   decltype( HashLine().result.load() )  result_t;
-const Hash* HashLine::hashtype = &_gost34112012_256;
+const HashBase* HashLine::hashtype = &_gost34112012_256;
 
-///output formated hash digest as hex string  on stdout or stderr
+/// output formated hash digest as hex string  on stdout or stderr
 static inline void print_digest(ostream& ostr, unsigned char* digest, unsigned short digest_size){
     ostr<< setfill('0') << setw(2) <<hex<< right;
     
@@ -324,7 +330,7 @@ static inline void print_digest(ostream& ostr, unsigned char* digest, unsigned s
     }
 }
 
-///print file hash digest
+/// print file hash digest
 static int digest_file(const char* filename){
     unsigned char actual[64];
     {
@@ -340,7 +346,7 @@ static int digest_file(const char* filename){
             hash.getDigest(cin, actual);
         }
         
-        print_digest(cerr, actual, hash.getDigestSize());
+        print_digest(cerr, actual, HashLine::hashtype->digestsize());
     }
     if(flag_verbose){
         cerr<<" "<<filename;
@@ -348,7 +354,7 @@ static int digest_file(const char* filename){
     cerr<<endl;
     return 0;
 }
-///return true if any task has status Completed (success or error)
+/// return true if any task has status Completed (success or error)
 inline static bool _hascomplete(std::array<HashLine, HASH_LINE_SIZE>&  hash){
     for(auto& h: hash){
         
@@ -365,19 +371,22 @@ inline static bool _hascomplete(std::array<HashLine, HASH_LINE_SIZE>&  hash){
     }
     return false;
 }
-///verify files hash digest
+/// verify files hash digest
 static int check_file(const char* filename){
-    std::array<thread, 6> t;  //threads
+    std::vector<thread> t;  //threads
     std::array<HashLine, HASH_LINE_SIZE>  hash;
     
     char hashbuf[64];
+    //stop worker thread flag
     bool stop = false;
     int  res = 0;
 
     mutex  work_mutex;
+    //fire than main thread submit task
     condition_variable work_var;
+    //fire than worker thread release task
     condition_variable main_var;
-    
+    //number of  waiting tasks (submitted not taken)
     atomic_ushort   inprogress{0};
     ifstream file(filename);
     
@@ -385,8 +394,11 @@ static int check_file(const char* filename){
     file.seekg(0,ios_base::end);
     std::streamoff size = file.tellg();
     file.seekg(0,ios_base::beg);
+    if(!file){
+        return GS_ERR_FILE;
+    }
     
-    //worker function
+    //worker thread function
     auto work = [&]{     
         unsigned short c{0}; 
         do{
@@ -416,6 +428,7 @@ static int check_file(const char* filename){
             }
             
             {
+                //lock and wait for notification. (work_var during wait stand in unlocked state. 
                 unique_lock<mutex> lock(work_mutex);
                 c = inprogress.load( memory_order_acquire );
           
@@ -436,44 +449,48 @@ static int check_file(const char* filename){
    
     };
     //check file line number
-    ln = 1;
+    ln = 0;
     //use single thread for small file count
     bool  use_async = (size>10000) && !flag_noasync;
     
     if(use_async){
         unsigned int thread_count = std::thread::hardware_concurrency();
 
-        if(thread_count > t.size() )
-            thread_count = t.size();
+        if(thread_count > 6 )
+            thread_count = 6;
+        if(thread_count==0)
+            thread_count = 2;
         //prepare threads pool
         for(unsigned int i=0;i<thread_count;i++){
-            t[i] = std::move( thread(work) );
+            t.emplace_back( work );
         }
     }
     
     //free block pointer
     HashLine* line_ptr = &hash.front(); 
-    unsigned short digest_size = line_ptr->getDigestSize();
+    unsigned short digest_size = HashLine::hashtype->digestsize();
     
     while (true)
     {
+        //next line 
+        ln++;
         //get first 32 byte of hash
         file.read(hashbuf, sizeof(hashbuf) );
         if(file.eof() && file.gcount()==0){
             break;
         }
-        //at least 32 byte hash must be present at the begining
+        //at least 32 byte hash must be present at the beginning of line
         if(file.gcount()!= sizeof(hashbuf)){
             res = GS_ERR_FILE;
             break;  
         }
-        //find free block
+        //find free task slot
         while(line_ptr == nullptr ){
                
             short cc=4; //tweak parameter
             //lock free loop
             for(auto& h: hash){
-                HashResult s =  h.getHashResult(); 
+                auto s = h.getHashResult();
                 switch(s){
                     
                     case Failed:
@@ -490,7 +507,6 @@ static int check_file(const char* filename){
                         
                         line_ptr = &h;
                         cc--;
-                        
                         break;
                     case Initial:
                         //free slot found
@@ -545,17 +561,15 @@ static int check_file(const char* filename){
             break;              
         }
             
-        //tail of  line is file name 
+        //tail of the line is a file name 
         getline(file, line_ptr->filename );
         
-        //file name can't be empty
+        //a file name can't be empty
         if(line_ptr->filename.empty()){
             res = GS_ERR_FILE;
             break;
         }
-        //next line 
-        ln++;
-        
+
         if(use_async){
             unique_lock<mutex> lock(work_mutex);     
             //push task in queue
@@ -580,9 +594,8 @@ static int check_file(const char* filename){
             if( s!= Success ){
                 res = 1;
                 errcount++;
-            }
-            //line_ptr->result.store(RES_UNKNOWN, memory_order_release);
-            //keep line_ptr
+            }            
+            //keep line_ptr. next line can reuse it
         }   
     } //end while
 
@@ -601,7 +614,6 @@ static int check_file(const char* filename){
         for(auto& h: hash){
             HashResult s =  h.getHashResult(); 
             switch(s){
-            
                 case Failed:
                 case FileError:
                     res = GS_ERR_FILE;
@@ -609,7 +621,6 @@ static int check_file(const char* filename){
                     res = GS_ERR_HASH;
                     errcount++;
                 case Success:
-                    
                     if(flag_verbose){
                         h.print_status(s);
                     }
@@ -626,7 +637,7 @@ static int check_file(const char* filename){
     }
     return res;
 }
-///brief explanation info
+/// brief explanation info
 static int printusage(const char* executable){
     cerr<<"file hash calculation and validation tool"<<endl;
     cerr<<"usage: "<<executable << " [-h]| [-Vv][-t hashtype] filename| - | -c checkfile " << endl;
@@ -661,8 +672,7 @@ int main(int argc, char *argv[]){
                     printf("unknown -t option %s\n",optarg);
                     return printusage(argv[0]);
                 }
-
-            break;
+                break;
             case 'x': flag_stdin=true; break;
             case 'c': check_filename = optarg; break;
             case '?': 
@@ -724,15 +734,24 @@ int main(int argc, char *argv[]){
         }
         restoreConsole();
         return rez;
-    }else if (argv[optind] !=NULL){
+    }else if (argv[optind] !=nullptr ){
         
-        if( strcmp(argv[optind], "-") ==0 ){
-            //flag_stdin = true;
-        }else{
-            input_filename = argv[optind];
+        while(argv[optind] !=nullptr ){
+        
+            if( strcmp(argv[optind], "-") ==0 ){
+                //flag_stdin = true;
+                input_filename = nullptr;
+            }else{
+                input_filename = argv[optind];
+            }
+            rez = digest_file(input_filename);
+            if( rez != GS_OK){
+                break;
+            }
+            optind++;
         }
         
-        return digest_file(input_filename);
+        return rez;
     }else{
         return printusage(argv[0]);
     } 
