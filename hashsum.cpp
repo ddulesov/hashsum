@@ -72,6 +72,7 @@ static atomic_ulong  calc_time{0};
 
 class HashBase{
 public:
+
     virtual size_t  digest (istream& istr, unsigned char out[64]) const noexcept{
         return 0;
     }
@@ -239,7 +240,9 @@ public:
     
 
     inline void Release() noexcept{
+        //length = 0;
         result.store(HashResult::Initial, memory_order_release);
+        
     }
     
     inline void SetHashResult(HashResult r) noexcept{
@@ -301,13 +304,14 @@ public:
     }
     
     void getDigest(istream& istr, unsigned char out[64]) {
-        length = hashtype->digest(istr, out);
+        length= hashtype->digest(istr, out);
     }
         
     HashResult verifyDigest(){
-        auto s = _verify();
-        result.store(s, memory_order_release);
-        return s;
+        length = 0;
+        return _verify();
+        //result.store(s, memory_order_release);
+        //return s;
     }
     
     void print_status(HashResult r) const{
@@ -409,14 +413,16 @@ static int check_file(const char* filename){
                 if(s == static_cast<result_t>( Wait ) ){
                     
                     if( h.result.compare_exchange_weak(s, static_cast<result_t>(Taken),
-                        memory_order_release,
+                        memory_order_acq_rel,
                         memory_order_relaxed) ) {
-
-                        c =inprogress.fetch_sub(1, memory_order_release )-1;
-                    
-                        s = h.verifyDigest();
+                        c =inprogress.fetch_sub(1, memory_order_relaxed )-1;
+                        
+                        auto hr = h.verifyDigest();
                         total_size.fetch_add(h.length, memory_order_relaxed);
-
+						
+						
+						
+                        h.SetHashResult( hr );
                         main_var.notify_one();                      
                         //this_thread::yield();
                     }else{
@@ -442,10 +448,12 @@ static int check_file(const char* filename){
                     auto time_span = std::chrono::duration_cast< std::chrono::microseconds >(t2 - t1);
                     
                     worker_wait_time.fetch_add(  static_cast<unsigned long>( time_span.count() ), memory_order_relaxed );
+                }else if( c==0 && stop){
+                    break;
                 }
             }
             
-        }while(!stop || c>0);
+        }while( true ); //!stop || c>0);
    
     };
     //check file line number
@@ -503,9 +511,10 @@ static int check_file(const char* filename){
                         if(flag_verbose){
                             h.print_status(s);
                         }
+                        line_ptr = &h;
                         h.Release();
                         
-                        line_ptr = &h;
+                        
                         cc--;
                         break;
                     case Initial:
@@ -668,6 +677,7 @@ int main(int argc, char *argv[]){
                     HashLine::hashtype = &_gost34112012_512;
                 }else if( strcmp(optarg, "b3")==0 ){
                     HashLine::hashtype = &_blake3;
+					cpu_features();
                 }else{
                     printf("unknown -t option %s\n",optarg);
                     return printusage(argv[0]);

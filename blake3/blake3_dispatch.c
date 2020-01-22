@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 #include "blake3.h"
 
@@ -147,17 +148,26 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-unsigned int g_cpu_features = UNDEFINED;
+_Atomic unsigned int  g_cpu_features = UNDEFINED;
+
+//#if !defined(BLAKE3_TESTING)
+//static 
+//#endif
 
 #if !defined(BLAKE3_TESTING)
-static 
+static inline
 #endif
-unsigned int get_cpu_features()
+unsigned int get_cpu_features(){
+#if defined(IS_X86)
+    return atomic_load_explicit(&g_cpu_features, memory_order_consume);
+#else
+    return 0
+#endif
+}
+
+unsigned int cpu_features()
 {
     
-    if( g_cpu_features != UNDEFINED ) {
-        return g_cpu_features;
-    } else {
 #if defined(IS_X86)
         uint32_t regs[4] = {0};
         uint32_t * eax = &regs[0], * ebx = &regs[1], * ecx = &regs[2], * edx = &regs[3];
@@ -195,15 +205,18 @@ unsigned int get_cpu_features()
                 }
             }
         }
-        g_cpu_features = features;
+        atomic_store_explicit(&g_cpu_features, features, memory_order_release );
+        
         return features;
 #elif defined(IS_ARM)
         /* How to detect NEON? */
+        g_cpu_features = 0;
         return 0;
 #else
+        g_cpu_features = 0;
         return 0;
 #endif
-    }
+    
 }
 
 void blake3_compress_in_place(uint32_t cv[8], 
@@ -211,7 +224,7 @@ void blake3_compress_in_place(uint32_t cv[8],
                               uint8_t block_len, uint64_t counter, 
                               uint8_t flags)
 {
-    const unsigned int features = get_cpu_features();
+    const unsigned int features = get_cpu_features(); 
 #if defined(IS_X86)
 #ifdef BLAKE3_USE_AVX512
     if(features & AVX512VL) {
@@ -232,7 +245,7 @@ void blake3_compress_xof(const uint32_t cv[8],
                         uint8_t block_len, uint64_t counter,
                         uint8_t flags, uint8_t out[64])
 {
-    const unsigned int features = get_cpu_features();
+    const unsigned int features = get_cpu_features(); 
 #if defined(IS_X86)
 #ifdef BLAKE3_USE_AVX512
     if(features & AVX512VL) {
@@ -254,7 +267,7 @@ void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,
                            uint8_t flags, uint8_t flags_start,
                            uint8_t flags_end, uint8_t *out)
 {
-    const unsigned int features = get_cpu_features();
+    const unsigned int features = get_cpu_features(); 
 #if defined(IS_X86)
 #ifdef BLAKE3_USE_AVX512
     if(features & AVX512F) {

@@ -37,7 +37,7 @@ void blake3_hasher_update(blake3_hasher *self, const void *input,
                           size_t input_len);
 void blake3_hasher_finalize(const blake3_hasher *self, uint8_t *out,
                             size_t out_len);
-
+unsigned int cpu_features();
 #if defined(__cplusplus)
 }
 #endif
