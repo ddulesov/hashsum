@@ -2,10 +2,6 @@
 
 #include <arm_neon.h>
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 // TODO: This is probably incorrect for big-endian ARM. How should that work?
 INLINE uint32x4_t loadu_128(const uint8_t src[16]) {
   // vld1q_u32 has alignment requirements. Don't use it.
@@ -348,7 +344,3 @@ void blake3_hash_many_neon(const uint8_t *const *inputs, size_t num_inputs,
     out = &out[BLAKE3_OUT_LEN];
   }
 }
-
-#if defined(__cplusplus)
-}
-#endif

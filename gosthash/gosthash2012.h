@@ -15,14 +15,14 @@
 #endif
 
 #ifdef ENABLE_SIMD
-# if defined(__SSE2__) || defined(_M_AMD64) || defined(_M_X64)
+# if  defined(__SSE2__) || defined(_M_AMD64) || defined(_M_X64)
 #  define __GOST3411_HAS_SSE2__
 #  if !defined(__x86_64__)
-   /* x86-64 bit Linux and Windows ABIs provide malloc function that returns 16-byte alignment
-      memory buffers required by SSE load/store instructions. Other platforms require special trick  
-      for proper gost2012_hash_ctx structure allocation. It will be easier to switch to unaligned 
-      loadu/storeu memory access instructions in this case.
-   */  
+ /* x86-64 bit Linux and Windows ABIs provide malloc function that returns 16-byte alignment
+	memory buffers required by SSE load/store instructions. Other platforms require special trick
+	for proper gost2012_hash_ctx structure allocation. It will be easier to switch to unaligned
+	loadu/storeu memory access instructions in this case.
+ */
 #   define UNALIGNED_MEM_ACCESS 
 #  endif   
 # endif
@@ -35,8 +35,8 @@
 #else
 # if !defined(__i386__) && !defined(__x86_64__)
  /*Assume other platforms are not capable unaligned memory read
-   or unaligned memory read is not fast enough 
- */ 
+   or unaligned memory read is not fast enough
+ */
 #  define UNALIGNED_MEM_ACCESS
 # endif
 #endif
@@ -50,9 +50,9 @@
 #endif
 
 #if defined __GOST3411_HAS_SSE2__
-# include "gosthash2012_sse2.h"
+#include "gosthash2012_sse2.h"
 #else
-# include "gosthash2012_ref.h"
+#include "gosthash2012_ref.h"
 #endif
 
 #if defined(_WIN32) || defined(_WINDOWS)
@@ -87,31 +87,30 @@
 extern "C" {
 #endif
 
-
-ALIGN(16)
-typedef union uint512_u {
-    unsigned long long QWORD[8];
-    unsigned char B[64];
-} uint512_u;
+	ALIGN(16)
+		typedef union uint512_u {
+		unsigned long long QWORD[8];
+		unsigned char B[64];
+	} uint512_u;
 
 #include "gosthash2012_const.h"
 #include "gosthash2012_precalc.h"
 
-/* GOST R 34.11-2012 hash context */
-typedef struct gost2012_hash_ctx {
-    union uint512_u buffer;
-    union uint512_u h;
-    union uint512_u N;
-    union uint512_u Sigma;
-    size_t bufsize;
-    unsigned int digest_size;
-} gost2012_hash_ctx;
+	/* GOST R 34.11-2012 hash context */
+	typedef struct gost2012_hash_ctx {
+		union uint512_u buffer;
+		union uint512_u h;
+		union uint512_u N;
+		union uint512_u Sigma;
+		size_t bufsize;
+		unsigned int digest_size;
+	} gost2012_hash_ctx;
 
-void init_gost2012_hash_ctx(gost2012_hash_ctx * CTX,
-                            const unsigned int digest_size);
-void gost2012_hash_block(gost2012_hash_ctx * CTX,
-                         const unsigned char *data, size_t len);
-void gost2012_finish_hash(gost2012_hash_ctx * CTX, unsigned char *digest);
+	void init_gost2012_hash_ctx(gost2012_hash_ctx* CTX,
+		const unsigned int digest_size);
+	void gost2012_hash_block(gost2012_hash_ctx* CTX,
+		const unsigned char* data, size_t len);
+	void gost2012_finish_hash(gost2012_hash_ctx* CTX, unsigned char* digest);
 
 #if defined(__cplusplus)
 }
