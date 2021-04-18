@@ -55,8 +55,7 @@ set(GOSTHASH_SOURCE_FILES
 add_executable (hashsum ${HASHSUM_SOURCE_FILES} ${GOSTHASH_SOURCE_FILES} ${BLAKE3_SOURCE_FILES})
 
 if(MSVC)
-    target_compile_options(hashsum PRIVATE /W3 /WX /MP /arch:AVX2 /wd5105)
-    #SET_TARGET_PROPERTIES(hashsum PROPERTIES LINK_FLAGS "/link setargv.obj")
+    target_compile_options(hashsum PRIVATE /W3 /WX /MP /arch:SSE2 /wd5105)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} setargv.obj") 
     #add_compile_options(/arch:AVX512)
     #add_compile_options(/arch:AVX2)
@@ -69,6 +68,7 @@ else()
     set_source_files_properties(blake3/blake3_avx2.c PROPERTIES COMPILE_FLAGS "-mavx2")
     set_source_files_properties(blake3/blake3_avx512.c PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512vl")
 
+    ## GCC until version 8.0 doesn`t support <filesystem> 
     #if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7)
     #    target_link_libraries(hashsum stdc++fs)
     #endif()

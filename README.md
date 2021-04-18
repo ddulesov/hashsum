@@ -8,7 +8,8 @@ Support Linux, FreeBSD, Microsoft Windows
 ## Usage
 To create a file with an gost-34.11-2012 hash in it, if one is not provided:
 ```
-$ hashsum filename [filename2] ... > GOSTSUM.check
+$ hashsum -t g256 filename [filename2] ... > GOSTSUM.check
+$ hashsum -t g256 * > GOSTSUM.check
 ```
 Using Blake3 
 ```
@@ -22,19 +23,19 @@ $ hashsum -t b3 - < input_file
 
 ## Verification
 ```
-$ hashsum  -c GOSTSUM.check
+$ hashsum  -t g256 -c GOSTSUM.check
 ```
 "-t g256" parameter is omitted as it is default hash type 
 
 
 "-v" verbose output contain each verified file and hash validation status
 ```
-$ hashsum  -vc GOSTSUM.check
+$ hashsum  -t g256 -c GOSTSUM.check
 ```
 
 Blake3 hash verification
 ```
-$ hashsum  -t bl3 -c BLAKE3SUM.check
+$ hashsum  -t b3 -c BLAKE3SUM.check
 ```
 
 ## Returns
